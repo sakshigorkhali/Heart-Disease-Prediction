@@ -4,7 +4,7 @@ This project explores a heart failure prediction dataset to build classification
 
 Dataset Source: https://www.kaggle.com/datasets/fedesoriano/heart-failure-prediction/data
 
-Techniques explored in project:
+**Techniques explored in project:**
 - Exporatoray Data Analysis
 - Data Cleaning and Pre-processing
 - Dimensionality Reduction using PCA
