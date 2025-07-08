@@ -1,0 +1,564 @@
+---
+title: "DSC 411:Final Report"
+author: "Sakshi Gorkhali"
+date: "2024-11-14"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## A. Data Gathering:
+
+I found this data from Kaggle named as [Heart Failure Prediction Data set](https://wwaw.kaggle.com/datasets/fedesoriano/heart-failure-prediction/data), it is used to predict whether a person is likely to have a heart failure by studying their medical report.
+
+```{r}
+heart <- read.csv("/Users/cdmstudent/Downloads/DSC411-FundamentalsofDataScience/heart.csv") 
+head(heart)
+#Looking for missing values
+sum(is.na(heart))
+summary(heart)
+
+```
+
+From searching to see if there are any NA values in our dataset, we can see that there are non but from the summary statistics we can see that there are zero values in resting BP and Cholesterol. As from our knowledge we know that resting BP and cholesterol both cannot be zero, so we search them.
+
+```{r}
+sum(heart$Cholesterol==0)
+sum(heart$RestingBP==0)
+dim(heart)
+```
+
+There are total of 172 data with cholesterol= 0 and 1 data with RestingBP= 0. As we have 918 data and also cholesterol for each patient is different and is better not to assume them, we remove them.
+
+```{r}
+library(tidyverse) 
+library(dplyr)
+heart<- heart %>%
+  filter(RestingBP != 0, Cholesterol != 0)
+dim(heart)
+```
+
+## **B. Data Exploration:**
+
+```{r warning=FALSE}
+library(ggplot2) 
+library(GGally)
+#Checking the summary of our data
+str(heart)
+heart$HeartDisease<- as.factor(heart$HeartDisease)
+heart$FastingBS<- as.factor(heart$FastingBS)
+heart$Sex<- as.factor(heart$Sex)
+heart$ChestPainType<- as.factor(heart$ChestPainType)
+heart$ExerciseAngina<- as.factor(heart$ExerciseAngina)
+heart$ST_Slope<- as.factor(heart$ST_Slope)
+heart$RestingECG<- as.factor(heart$RestingECG)
+
+
+
+#Exploring correlation of our numerical variables with eachother and heartdisease:
+numerical<- c("Age","RestingBP","Cholesterol","FastingBS","MaxHR", "Oldpeak","HeartDisease")
+ggpairs(heart[numerical])
+```
+
+-   Exploring the distribution of our data:
+
+```{r}
+#For categorical data:
+ggplot(heart, aes(x=Sex, fill=Sex)) +
+geom_bar() 
+ggplot(heart, aes(x=ChestPainType, fill=ChestPainType)) +
+geom_bar() 
+ggplot(heart, aes(x=RestingECG, fill=RestingECG)) +
+geom_bar() 
+ggplot(heart, aes(x=ExerciseAngina, fill=ExerciseAngina)) +
+geom_bar() 
+ggplot(heart, aes(x=ST_Slope, fill=ST_Slope)) +
+geom_bar() 
+ggplot(heart, aes(x=FastingBS, fill=FastingBS)) +
+geom_bar() 
+
+heart%>%
+   group_by(HeartDisease)%>%
+   summarise('count'=n())  
+
+ggplot(heart, aes(x=HeartDisease, fill=HeartDisease)) +
+geom_bar()
+
+#For numerical variables:
+ggplot(heart, aes(x = Age)) + 
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Age Distribution", x = "Age", y = "Count")
+
+ggplot(heart, aes(x=RestingBP)) +
+  geom_density(fill="#FF9999", alpha=0.7) +
+  labs(title="RestingBP Distribution", x="RestingBP", y="Density") +
+  theme_minimal()
+
+ggplot(heart, aes(x=Cholesterol)) +
+  geom_density(fill="#FF9999", alpha=0.7) +
+  labs(title="Cholesterol Distribution", x="Cholesterol", y="Density") +
+  theme_minimal()
+
+ggplot(heart, aes(x = MaxHR)) + 
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  theme_minimal() +
+  labs(title = "MaxHR Distribution", x = "MaxHR", y = "Count")
+
+ggplot(heart, aes(x=Oldpeak)) +
+  geom_density(fill="#FF9999", alpha=0.7) +
+  labs(title="Oldpeak Distribution", x="Oldpeak", y="Density") +
+  theme_minimal()
+```
+
+From the distribution most of our seem to be distributed well. Our target variable Heart Disease is also equally distributed.
+
+## **C. Data Cleaning:**
+
+We removed na and zero values from our data set in **data gathering process** and from the study of the distribution our data seems to be well distributed for both categorical as well as numerical. Now using box plot we look at the outliers that are present in our data.
+
+```{r}
+boxplot(heart$Cholesterol,main="Cholesterol", col="lightblue")
+boxplot(heart$RestingBP,main="Resting BP", col="lightblue")
+boxplot(heart$Oldpeak,main="Old Peak", col="lightblue")
+boxplot(heart$MaxHR,main="Max HR", col="lightblue")
+
+numerical<- c("RestingBP","Cholesterol", "Oldpeak")
+clean_heart<- heart
+for (col in numerical) {
+  Q1 <- quantile(clean_heart[[col]], 0.25)
+  Q3 <- quantile(clean_heart[[col]], 0.75)
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+
+# Keep only rows where the values are within the bounds
+clean_heart <- clean_heart[clean_heart[[col]] >= lower_bound & clean_heart[[col]] <= upper_bound, ]
+}
+
+summary(clean_heart)
+dim(clean_heart)
+
+```
+
+From our plot, we can see there are some presence of some outliers, I first tried to bin the data into separate bins for cholesterol and Resting BP according to medical standards instead of just **binning** according to the number of bins I want. But, according to different sources, the separation of low normal and high depends on various factor such as sex, age of the patient so it is difficult to generalize a specific point to separate the labels. So instead I opted to removing them. Also, our target variable has 2 labels so all the outliers at the two end will belong to either class so removing them might not impact the understanding of the data and also as our classifiers are sensitive to outliers, removing them will help in better prediction. Our data set has 692 data points after removal.
+
+## **D. Data Pre processing:**
+
+Normalizing our numerical data with min and max for better predictions as non of our data have negative and having all data normalized to same scale helps better clustering.
+
+```{r}
+library(caret)
+numerical<- c("Cholesterol", "Oldpeak","Age","MaxHR", "RestingBP")
+preprocess_model <- preProcess(clean_heart[numerical], method = c("range"))
+
+#Apply normalization to numerical variables
+clean_heart_normal <- predict(preprocess_model, clean_heart)
+head(clean_heart_normal)
+
+ggplot(clean_heart_normal, aes(x=Oldpeak)) + geom_density(fill="#DD1189", alpha=0.7) + labs(title="Oldpeak Distribution", x="Oldpeak", y="Density") + theme_minimal()
+
+ggplot(clean_heart_normal, aes(x=Cholesterol)) + geom_density(fill="#EE4573", alpha=0.7) + labs(title="Cholesterol Distribution", x="Cholesterol", y="Density") + theme_minimal()
+
+ggplot(clean_heart_normal, aes(x=RestingBP)) + geom_density(fill="#CC9999", alpha=0.7) + labs(title="RestingBP Distribution", x="RestingBP", y="Density") + theme_minimal()
+
+```
+
+Making dummy variables:
+
+```{r}
+heart11<-clean_heart_normal%>%
+  select(-HeartDisease)
+dummy11<- dummyVars(~., data=heart11)
+clean_heart_data<- as.data.frame(predict(dummy11, newdata= heart11))
+clean_heart_data$HeartDisease<-clean_heart_normal$HeartDisease
+head(clean_heart_data)
+nzv <- nearZeroVar(clean_heart_data) 
+length(nzv)
+summary(clean_heart_data)
+
+```
+
+## **E. Clustering**
+
+As our data has both numerical as well as categorical data, and I have already converted my categorical data into dummy I used **k means** clustering.
+
+```{r}
+heart_data22<- clean_heart_data
+heart_data22<-heart_data22%>%
+  select(-HeartDisease)
+
+set.seed(123)
+library(stats)
+library(factoextra)
+library(cluster)
+#Finding the elbow 
+fviz_nbclust(heart_data22, kmeans, method="wss")
+
+#Using Average Silhouette 
+fviz_nbclust(heart_data22, kmeans, method="silhouette")
+```
+
+From the first plot, we can see an elbow in 2, say we can say the optimal cluster for our data is 2 in both cases, now applying k means:
+
+```{r}
+set.seed(123)
+clean_heart_kmeans<- kmeans(heart_data22, centers= 2, nstart = 25)
+
+#comparing with actual labels:
+comparison_df<-data.frame(
+  Cluster=clean_heart_kmeans$cluster,
+  Label=clean_heart_data$HeartDisease
+)
+
+#creating a contingency table:
+contingency_table<- table(comparison_df)
+contingency_table
+
+#PCA for visualization:
+pca = prcomp(heart_data22)
+rotated_data = as.data.frame(pca$x)
+rotated_data$Color <- clean_heart_data$HeartDisease
+ggplot(data = rotated_data, aes(x = PC1, y = PC2, col = Color)) + geom_point(alpha = 0.3)
+
+# Assign clusters as a new column
+rotated_data$Kmeans = as.factor(clean_heart_kmeans$cluster)
+# Plot and color by labels
+ggplot(data = rotated_data, aes(x = PC1, y = PC2, col = Kmeans)) + geom_point()
+
+
+```
+
+From the contigency table, we can see that k means doing a great job separating true positives and negatives but in reverse, trying with HAC to see its clusters with our normalized data before making dummy:
+
+```{r}
+str(clean_heart_normal) 
+hac_heart<-clean_heart_normal%>% 
+select(-HeartDisease) 
+library(cluster) 
+
+#passing dataframe with metric= gower as it is categorical  
+dist_mat2 <-daisy(hac_heart, metric="gower")  
+summary(dist_mat2) 
+hc_complete <- hclust(dist_mat2, method = "complete")
+hc_average <- hclust(dist_mat2, method = "average")
+hc_ward <- hclust(dist_mat2, method = "ward.D2") 
+
+
+
+fviz_nbclust(hac_heart, FUN = hcut, method = "wss")
+fviz_nbclust(hac_heart, FUN = hcut, method = "silhouette")
+
+h1 <- cutree(hc_complete, k=2)
+h2<- cutree(hc_average, k=2)
+h3<- cutree(hc_ward, k=2)
+
+result <- data.frame(Disease = clean_heart_normal$HeartDisease, HAC1=h1, HAC2= h2, HAC3 = h3, Kmeans = clean_heart_kmeans$cluster)
+
+result %>% group_by(HAC1) %>% select(HAC1, Disease) %>% table()
+result %>% group_by(HAC2) %>% select(HAC2, Disease) %>% table()
+result %>% group_by(HAC3) %>% select(HAC3, Disease) %>% table()
+result %>% group_by(Kmeans) %>% select(Kmeans, Disease) %>% table()
+
+
+#pca visualization:
+pca = prcomp(heart_data22)
+rotated_data1 = as.data.frame(pca$x)
+rotated_data1$Color <- clean_heart_normal$HeartDisease
+ggplot(data = rotated_data, aes(x = PC1, y = PC2, col = Color)) + geom_point(alpha = 0.3)
+
+
+rotated_data$HAC = as.factor(h1)
+# Plot and color by labels
+ggplot(data = rotated_data, aes(x = PC1, y = PC2, col = HAC)) + geom_point(alpha = 0.3)
+
+```
+
+From the table, HAC1 gives the most accurate prediction.
+
+## **F. Classification:**
+
+I chose SVM and Decision Tree:
+
+Splitting the data into test and train:
+
+```{r}
+library(e1071)
+set.seed(123)
+train_index <- createDataPartition(clean_heart_data$HeartDisease, p = 0.8, list = FALSE)
+train_data <- clean_heart_data[train_index, ]
+test_data <- clean_heart_data[-train_index, ]
+```
+
+#### Using Decision tree:
+
+```{r}
+library(rpart)
+set.seed(123)
+
+#train control for cv
+train_control <- trainControl(method = "cv", number = 10)
+
+#Tree 1
+hypers = rpart.control(minsplit = 4000, maxdepth = 30, minbucket=800)
+tree1<- train(HeartDisease~., data= train_data, control= hypers, trControl= train_control, method="rpart1SE")
+
+#Training Set 1
+pred_tree <- predict(tree1, train_data)
+#Confusion matrix Train 1:
+cfm_train <- confusionMatrix(train_data$HeartDisease, pred_tree)
+
+#Test Set 1
+pred_tree <- predict(tree1, test_data)
+#Confusion matrix Test 1:
+cfm_test <- confusionMatrix(test_data$HeartDisease, pred_tree)
+
+#Getting training accuracy:
+a_train<- cfm_train$overall[1]
+#Getting testing accuracy:
+a_test<- cfm_test$overall[1]
+#Getting number of nodes
+nodes<- nrow(tree1$finalModel$frame)
+
+#From the table
+comp_tbl <-data.frame("Nodes"=nodes, "TrainAccuracy"= a_train, "TestAccuracy"= a_test, "Minsplit"=4000,"MaxDepth"=30, "Minbucket"=800)
+
+
+#Tree with Rpart1SE and no selection of hyperparameter:
+tree<- train(HeartDisease~., data= train_data, trControl= train_control, method="rpart1SE")
+
+#Training Set 
+pred_tree <- predict(tree, train_data)
+#Confusion matrix Train 1:
+cfm_train <- confusionMatrix(train_data$HeartDisease, pred_tree)
+#Test Set 
+pred_tree <- predict(tree, test_data)
+#Confusion matrix Test 1:
+cfm_test <- confusionMatrix(test_data$HeartDisease, pred_tree)
+
+
+#Getting training accuracy:
+a_train<- cfm_train$overall[1]
+#Getting testing accuracy:
+a_test<- cfm_test$overall[1]
+#Getting number of nodes
+nodes<- nrow(tree$finalModel$frame)
+
+comp_tbl <- comp_tbl %>% rbind(list(nodes, a_train, a_test, "Rpart1SE", "-", "-"))
+
+#Tree 2
+hypers = rpart.control(minsplit = 300, maxdepth = 4, minbucket=70)
+tree2<- train(HeartDisease~., data= train_data, control= hypers, trControl= train_control, method="rpart1SE")
+
+#Training Set 2
+pred_tree <- predict(tree2, train_data)
+#Confusion matrix Train 2:
+cfm_train <- confusionMatrix(train_data$HeartDisease, pred_tree)
+
+#Test Set 2
+pred_tree <- predict(tree2, test_data)
+#Confusion matrix Test 2:
+cfm_test <- confusionMatrix(test_data$HeartDisease, pred_tree)
+
+#Getting training accuracy:
+a_train<- cfm_train$overall[1]
+#Getting testing accuracy:
+a_test<- cfm_test$overall[1]
+#Getting number of nodes
+nodes<- nrow(tree2$finalModel$frame)
+
+#Adding rows to the table
+comp_tbl <- comp_tbl %>% rbind(list(nodes, a_train, a_test, 300, 4, 70))
+
+
+#Tree 7
+hypers = rpart.control(minsplit = 10000, maxdepth = 3, minbucket=2000)
+tree7<- train(HeartDisease~., data= train_data, control= hypers, trControl= train_control, method="rpart1SE")
+
+#Training Set 7
+pred_tree <- predict(tree7, train_data)
+#Confusion matrix Train 7:
+cfm_train <- confusionMatrix(train_data$HeartDisease, pred_tree)
+
+#Test Set 7
+pred_tree <- predict(tree7, test_data)
+#Confusion matrix Test 7:
+cfm_test <- confusionMatrix(test_data$HeartDisease, pred_tree)
+
+#Getting training accuracy:
+a_train<- cfm_train$overall[1]
+#Getting testing accuracy:
+a_test<- cfm_test$overall[1]
+#Getting number of nodes
+nodes<- nrow(tree7$finalModel$frame)
+
+#Adding rows to the table
+comp_tbl <- comp_tbl %>% rbind(list(nodes, a_train, a_test, 1, 4, 2))
+
+
+#Tree 9
+hypers = rpart.control(minsplit = 50, maxdepth = 3, minbucket=50)
+tree9<- train(HeartDisease~., data= train_data, control= hypers, trControl= train_control, method="rpart1SE")
+
+#Training Set 9
+pred_tree <- predict(tree9, train_data)
+#Confusion matrix Train 9:
+cfm_train <- confusionMatrix(train_data$HeartDisease, pred_tree)
+
+#Test Set 9
+pred_tree <- predict(tree9, test_data)
+#Confusion matrix Test 9:
+cfm_test <- confusionMatrix(test_data$HeartDisease, pred_tree)
+
+#Getting training accuracy:
+a_train<- cfm_train$overall[1]
+#Getting testing accuracy:
+a_test<- cfm_test$overall[1]
+#Getting number of nodes
+nodes<- nrow(tree9$finalModel$frame)
+
+#Adding rows to the table
+comp_tbl <- comp_tbl %>% rbind(list(nodes, a_train, a_test, 50, 3, 50))
+
+
+comp_tbl
+
+```
+
+I experimented with 12 different variation of Minimum split, Max Depth and minimum bucket but they gave the same nodes and accuracy so I included only few. The second one with highest node is from Rpart1SE with no altered parameters, it gives the best onw within 1 SE. Selecting the tree made by Rpart1SE as it has the best accuracy:
+
+```{r}
+library(rattle)
+
+Final_tree<- tree
+#Training Set 
+pred_final <- predict(Final_tree, train_data)
+#Confusion matrix Train:
+confusionMatrix(train_data$HeartDisease, pred_final)
+#Test Set 
+pred_tree_ <- predict(Final_tree, test_data)
+#Confusion matrix
+confusionMatrix(test_data$HeartDisease, pred_tree_)
+#Visualize our tree:
+fancyRpartPlot(Final_tree$finalModel, caption = "Decision Tree")
+
+
+```
+
+#### Using SVM:
+
+```{r}
+set.seed(123)
+train_control= trainControl(method = "cv", number= 10) 
+grid<- expand.grid(C=10^seq(-5,2,0.5))
+preproc= c("center","scale")
+svm_grid<- train(HeartDisease~., data= train_data, method="svmLinear",              trControl = train_control, tuneGrid = grid)
+svm_grid
+
+pred_split<- predict(svm_grid, test_data)
+sum(pred_split == test_data$HeartDisease) / nrow(test_data)
+
+
+train_control= trainControl(method = "cv", number= 10) 
+grid<- expand.grid(sigma = seq(0.001, 0.1), C=10^seq(-5,2,0.5))
+preproc= c("center","scale")
+svm_grid<- train(HeartDisease~., data= train_data, method="svmRadial",              trControl = train_control, tuneGrid = grid)
+svm_grid
+
+pred_split<- predict(svm_grid, test_data)
+sum(pred_split == test_data$HeartDisease) / nrow(test_data)
+
+
+
+```
+
+Comparing **Accuracy** our two classifiers:
+
+|                   |        |        |
+|:-----------------:|:------:|:------:|
+|                   | Train  |  Test  |
+| **Decision Tree** | 0.8881 | 0.8261 |
+|      **SVM**      | 0.8716 | 0.8043 |
+
+## G. Evaluation:
+
+#### Confusion Matrix:
+
+```{r}
+#Confusion matrix Train:
+confusionMatrix(train_data$HeartDisease, pred_final)
+#Test Set 
+pred_tree_ <- predict(Final_tree, test_data)
+#Confusion matrix
+cm<- confusionMatrix(test_data$HeartDisease,pred_tree_)
+cm
+```
+
+From our confusion matrix, we can see:
+
+60 were correctly predicted with no heart disease
+
+14 were incorrectly predicted no heart disease when actually they had heart disease
+
+10 were incorrectly classified with having heart disease when had no heart disease
+
+54 correctly predicted with having heart disease.
+
+As there is no class imbalance in our label , the accuracy on our test data is good but as this is a data relating to health, better accuracy is preferred. It is cruical that our classifier should be able to classify people with heart disease even more and make less classification error in classifying wrong for patients with heart disease as not having heart disease.
+
+#### Precision and Recall
+
+Manually calculating Precision and Recall:
+
+$$Recall =TP/(TP+FN)$$
+
+$=60/(60+10)$
+
+$=0.857$
+
+$$Precision= TP/(TP+FP)$$
+
+$=60/(60+10)$
+
+$=0.81$
+
+Also checking with the matrix,
+
+```{r}
+metrics <- as.data.frame(cm$byClass)
+recall<- metrics["Recall",]
+cat("Recall : \n", recall)
+
+precision<- metrics["Precision",]
+cat("Precision : \n", precision)
+
+
+```
+
+Precision of 0.8108 says that it is correctly able to predict about 81% of the positive label as positive.
+
+Recall of 0.8571 means model is correctly able to identify 85% of actual positive case.
+
+#### ROC Curves:
+
+```{r}
+library(pROC)
+pred_prob2<- predict(Final_tree, test_data, type="prob")
+head(pred_prob2)
+
+#ROC curve:
+roc_obj<- roc((test_data$HeartDisease), pred_prob2[,1])
+plot(roc_obj, print.auc=TRUE)
+```
+
+The Area under curve is 0.865, which is a good indicator, The curve is also well above the diagonal line which indication it is able to separate the class well.
+
+## H. Report:
+
+This data will help predict patient that are likely to have heart diseases but as this classification is critical and wrong classification of patient with heart disease as not having heart disease can impact analysis so much, the accuracy of 82% might not be enough and more classifiers can be tested to increase its prediction. I had an exciting learrning experience throughout this project deciding which steps to take along the way. I found how removing outliers could impact the study of data so much.
+
+## I. Reflection:
+
+I enrolled in this course because I was fascinated by the power of simple data to unreveal pattern and impact lives. I was excited about being able to learn to have that power to create things that could be crucial to help grow in various field. My interest in data science grew along with the course as I learnt the entire framework of data mining and machine learning. The process of how we need to first study and understand our data to make relevant decisions and analyse and prepare them before making any big decisions on it to studying the hidden patterns in our data by clustering and eventually creating models that can classify and predict.
