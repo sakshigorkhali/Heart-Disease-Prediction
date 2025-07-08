@@ -1,6 +1,6 @@
 # Heart-Disease-Prediction
 
-This project explores a heart failure prediction dataset to build classification and clustering moseld that can predict the presence of heart disease using patient medical information.
+This project explores a heart failure prediction dataset to build classification and clustering models that can predict the presence of heart disease using patient medical information.
 
 Dataset Source: https://www.kaggle.com/datasets/fedesoriano/heart-failure-prediction/data
 
